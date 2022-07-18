@@ -1,8 +1,8 @@
 # TASK SITE
 
 ## Demo
-- Site: [site.task.julian.im](https://site.task.julian.im)
-- Uptime: [uptime.task.julian.im](https://uptime.task.julian.im)
+- Site: [site.task.julian.im](site.task.julian.im)
+- Uptime: [uptime.task.julian.im](uptime.task.julian.im)
 
 ## Setup
 
