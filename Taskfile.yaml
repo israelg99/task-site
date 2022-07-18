@@ -1,0 +1,130 @@
+version: '3'
+
+run: once
+
+env:
+  SERVICE: 'task-site'
+
+  # We must first attempt to load AWS creds from the environment since resorting to config will always fail on Actions.
+  AWS_ACCOUNT_ID:
+    sh: echo ${AWS_ACCOUNT_ID:-$(aws sts get-caller-identity --query 'Account' --output text)}
+  AWS_REGION:
+    sh: |
+      region=${AWS_REGION:-${AWS_DEFAULT_REGION}}
+      if [ -z "$region" ]; then
+        CFG_REGION=$(aws configure get region)
+        CFG_DEFAULT_REGION=$(aws configure get aws_access_key_id)
+        echo ${CFG_REGION:-${CFG_DEFAULT_REGION}}
+      else
+          echo $region
+      fi
+  AWS_ACCESS_KEY_ID:
+    sh: echo ${AWS_ACCESS_KEY_ID:-$(aws configure get aws_access_key_id)}
+  AWS_SECRET_ACCESS_KEY:
+    sh: echo ${AWS_SECRET_ACCESS_KEY:-$(aws configure get aws_secret_access_key)}
+  REGISTRY: '{{ .AWS_ACCOUNT_ID }}.dkr.ecr.{{ .AWS_REGION }}.amazonaws.com'
+  IMAGE:
+    sh: |
+      if [ -z "{{ .VERSION }}" ]; then
+      # VERSION=$(date +%s)
+        VERSION=$(git rev-parse HEAD)
+      else
+        VERSION="{{ .VERSION }}"
+      fi
+      echo "{{ .REGISTRY }}/{{ .SERVICE }}:$VERSION"
+  AWS_PAGER: "" # So AWS wouldn't interactively mess with CI.
+
+tasks:
+  print:
+    desc: 'Print all variables'
+    cmds:
+      - echo "SERVICE {{ .SERVICE }}"
+      - echo "AWS_ACCOUNT_ID {{ .AWS_ACCOUNT_ID }}"
+      - echo "AWS_REGION {{ .AWS_REGION }}"
+      - echo "AWS_ACCESS_KEY_ID {{ .AWS_ACCESS_KEY_ID }}"
+      - echo "AWS_SECRET_ACCESS_KEY {{ .AWS_SECRET_ACCESS_KEY }}"
+      - echo "REGISTRY {{ .REGISTRY }}"
+      - echo "IMAGE {{ .IMAGE }}"
+    silent: true
+
+  install-dev:
+    desc: 'Install development dependencies'
+    cmds:
+      - npm install -g aws-cdk
+      - brew install act
+      - docker buildx install
+      - docker run --privileged --rm tonistiigi/binfmt --install all
+      - cdk bootstrap
+
+  deploy:
+    desc: 'Deploys image and infrastructure'
+    deps:
+      - push
+    env:
+      DOMAIN: '{{ .DOMAIN | default "" }}'
+    cmds:
+      - echo "DOMAIN {{ .DOMAIN }}"
+      - npm install
+      - npm install -g aws-cdk
+      - cdk deploy --all --require-approval never
+
+  build:
+    desc: 'Build image'
+    cmds:
+      - docker buildx build -t "{{ .IMAGE }}" --platform linux/{{ .ARCH }} {{ .SERVICE }} --{{ .ACTION }}
+    vars:
+      ACTION: '{{ .ACTION | default "load" }}'
+      ARCH: '{{ .ARCH | default "amd64" }}'
+
+  push:
+    desc: 'Push image'
+    cmds:
+      - aws ecr get-login-password | docker login -u AWS --password-stdin "{{ .REGISTRY }}"
+      - cmd: |
+          aws ecr create-repository \
+          --repository-name {{ .SERVICE }} \
+          --image-scanning-configuration scanOnPush=true \
+          --region {{ .AWS_REGION }}
+        ignore_error: true
+      - task: build
+        vars:
+          ACTION: 'push'
+          ARCH: 'arm64'
+
+  kill:
+    desc: 'Kill container'
+    cmds:
+      - cmd: docker kill "{{ .SERVICE }}"
+        ignore_error: true
+      - cmd: docker rm "{{ .SERVICE }}"
+        ignore_error: true
+
+  spin:
+      desc: 'Spin container'
+      deps:
+        - kill
+        - build
+      cmds:
+        - >
+          docker run -d --restart=always -p 80:80
+          --name "{{ .SERVICE }}"
+          "{{ .IMAGE }}"
+
+  tail:
+    desc: 'Tail logs'
+    cmds:
+      - docker logs -f "{{ .SERVICE }}"
+
+  run:
+    desc: 'Spin container and tail logs'
+    deps:
+      - build
+      - kill
+    cmds:
+      - task: spin
+      - task: tail
+
+  test:
+    desc: 'Run tests'
+    cmds:
+      - newman run --working-dir test -n 5 test/api.json

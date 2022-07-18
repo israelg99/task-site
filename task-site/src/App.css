@@ -1,0 +1,29 @@
+.logo {
+  height: 10em;
+}
+
+.overlap-container {
+  position: relative;
+  width: 100%;
+}
+
+.img-container {
+  position: absolute;
+  right: 0;
+  left: 0;
+  margin: auto;
+  width: 298.5px;
+}
+
+.overlap {
+  position: absolute;
+  right: 0;
+  left: 0;
+  margin: auto;
+}
+
+.box {
+  border: 1px solid black;
+  position: absolute;
+  margin: unset;
+}
