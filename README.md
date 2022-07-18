@@ -4,6 +4,8 @@
 - Site: [site.task.julian.im](site.task.julian.im)
 - Uptime: [uptime.task.julian.im](uptime.task.julian.im)
 
+> Please note you might get a warning on your browser about the site redirecting to https.
+
 ## Setup
 
 ### Dependencies
