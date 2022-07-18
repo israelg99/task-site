@@ -47,4 +47,6 @@ jobs:
       - name: Print variables
         run: task print
       - name: Deploy
+        env:
+          DOMAIN: ${{ secrets.DOMAIN }}
         run: task deploy
