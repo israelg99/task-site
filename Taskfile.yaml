@@ -50,6 +50,7 @@ tasks:
   install-dev:
     desc: 'Install development dependencies'
     cmds:
+      - npm install
       - npm install -g aws-cdk
       - brew install act
       - docker buildx install
